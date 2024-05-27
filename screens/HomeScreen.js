@@ -76,11 +76,15 @@ const HomeScreen = () => {
 
     if (loading) {
         return (
-            <View style={styles.loadingContainer}>
+            <View style={[styles.loadingContainer, { backgroundColor: isDarkMode ? 'black' : 'white' }]}>
                 <ActivityIndicator size="large" color="#2CA8ED" />
             </View>
         );
     }
+
+    const handleTranslateButton = () => {
+        navigation.navigate('Translate');
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : 'white' }]}>
@@ -97,7 +101,7 @@ const HomeScreen = () => {
             <ThemedText style={styles.optionsTitle}>Options</ThemedText>
 
             <View style={styles.optionsContainer}>
-                <TouchableOpacity style={styles.optionButton}>
+                <TouchableOpacity style={styles.optionButton} onPress={handleTranslateButton}>
                     <FontAwesome name="language" size={24} color={iconColor} />
                     <ThemedText style={styles.optionText}>Translate</ThemedText>
                 </TouchableOpacity>
@@ -214,9 +218,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     modalContent: {
-        // backgroundColor: '#e6f3ff',
         padding: 40,
-        // borderRadius: 10,
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         alignItems: 'center',

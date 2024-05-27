@@ -8,6 +8,7 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import HomeScreen from './screens/HomeScreen';
 import TranslateScreen from './screens/TranslateScreen';
+import HistoryScreen from './screens/HistoryScreen';
 
 import { FontAwesome } from '@expo/vector-icons';
 
@@ -30,7 +31,7 @@ const HomeTabNavigator = () => {
           }
           return <FontAwesome name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: isDarkMode ? '#Add8e6' : '#70E5E5',
+        tabBarActiveTintColor: isDarkMode ? '#47B6E5' : '#47B6E5',
         tabBarInactiveTintColor: isDarkMode ? 'gray' : 'black',
         tabBarStyle: { backgroundColor: isDarkMode ? 'black' : 'white' },
       })}
@@ -61,6 +62,11 @@ const App = () => {
           name="Register"
           component={RegisterScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="History"
+          component={HistoryScreen}
+          options={{ title: 'Translate History', headerTitleAlign: 'center', headerTintColor: '#fff', headerStyle: { backgroundColor: '#47B6E5' } }}
         />
         <Stack.Screen
           name="Homes"
