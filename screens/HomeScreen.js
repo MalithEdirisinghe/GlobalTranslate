@@ -86,6 +86,10 @@ const HomeScreen = () => {
         navigation.navigate('Translate');
     };
 
+    const handleChatButton = () => {
+        navigation.navigate('ChatList');
+    };
+
     return (
         <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : 'white' }]}>
             <View style={styles.profileContainer}>
@@ -109,7 +113,7 @@ const HomeScreen = () => {
                     <Ionicons name="game-controller" size={24} color={iconColor} />
                     <ThemedText style={styles.optionText}>Game</ThemedText>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.optionButton}>
+                <TouchableOpacity style={styles.optionButton} onPress={handleChatButton}>
                     <Entypo name="chat" size={24} color={iconColor} />
                     <ThemedText style={styles.optionText}>Chat</ThemedText>
                 </TouchableOpacity>
