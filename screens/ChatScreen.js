@@ -1,38 +1,156 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Image, useColorScheme } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Image, useColorScheme, Modal, Button } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { AntDesign } from '@expo/vector-icons';
+import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '../components/ThemedText';
+import { auth, db } from './firebase';
+import { collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import axios from 'axios';
+import moment from 'moment';
 
-const messagesData = [
-    { id: '1', text: 'Hi', sender: 'other' },
-    { id: '2', text: 'Hi', sender: 'self' },
-    { id: '3', text: 'How are you?', sender: 'self' },
-    { id: '4', text: 'I am good.', sender: 'other' },
+const API_KEY = 'AIzaSyC4e5GvHjW-WrlaZdoDXVRNg9AKRJ2uAWo';
+const languages = [
+    { code: 'en', name: 'English' },
+    { code: 'si', name: 'Sinhala' },
+    { code: 'ta', name: 'Tamil' },
+    { code: 'hi', name: 'Hindi' },
+    { code: 'zh', name: 'Chinese' },
+    { code: 'fr', name: 'French' }
 ];
 
 const ChatScreen = () => {
-    const [messages, setMessages] = useState(messagesData);
+    const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
+    const [modalVisible, setModalVisible] = useState(false);
+    const [selectedLanguage, setSelectedLanguage] = useState(languages[0]);
     const navigation = useNavigation();
     const route = useRoute();
     const colorScheme = useColorScheme();
     const isDarkMode = colorScheme === 'dark';
+    const flatListRef = useRef(null);
 
-    const user = route.params?.user || {};  // Use optional chaining and provide a default value
+    const user = route.params?.user || {};
+    const currentUser = auth.currentUser;
+    const updateChatList = route.params?.updateChatList;
 
-    const sendMessage = () => {
-        if (inputText.trim()) {
-            setMessages([...messages, { id: Date.now().toString(), text: inputText, sender: 'self' }]);
-            setInputText('');
+    useEffect(() => {
+        const messagesRef = collection(db, 'messages');
+        if (!currentUser?.uid || !user?.id) return;
+
+        const q = query(
+            messagesRef,
+            where('senderId', 'in', [currentUser.uid, user.id]),
+            where('receiverId', 'in', [currentUser.uid, user.id]),
+            orderBy('timestamp')
+        );
+
+        const unsubscribe = onSnapshot(q, async (querySnapshot) => {
+            const messagesList = await Promise.all(querySnapshot.docs.map(async (doc) => {
+                const data = doc.data();
+                if (data.senderId !== currentUser.uid && data.language !== selectedLanguage.code) {
+                    data.text = await translateMessage(data.text, data.language, selectedLanguage.code);
+                }
+                return { id: doc.id, ...data };
+            }));
+            setMessages(messagesList);
+            flatListRef.current?.scrollToEnd({ animated: true });
+        });
+
+        return () => unsubscribe();
+    }, [user.id, currentUser?.uid, selectedLanguage]);
+
+    const translateMessage = async (text, sourceLanguage, targetLanguage) => {
+        if (sourceLanguage === targetLanguage) {
+            return text;
+        }
+
+        try {
+            const response = await axios.post(
+                `https://translation.googleapis.com/language/translate/v2?key=${API_KEY}`,
+                {
+                    q: text,
+                    source: sourceLanguage,
+                    target: targetLanguage,
+                    format: 'text',
+                }
+            );
+            return response.data.data.translations[0].translatedText;
+        } catch (error) {
+            console.error('Error translating message:', error.response ? error.response.data : error.message);
+            return text;
         }
     };
 
-    const renderItem = ({ item }) => (
-        <View style={[styles.messageContainer, item.sender === 'self' ? styles.selfMessage : styles.otherMessage]}>
-            <Text style={styles.messageText}>{item.text}</Text>
-        </View>
-    );
+    const sendMessage = async () => {
+        if (inputText.trim()) {
+            setInputText('');
+            try {
+                const message = {
+                    text: inputText,
+                    senderId: currentUser.uid,
+                    receiverId: user.id,
+                    timestamp: new Date(),
+                    sent: true,
+                    delivered: false,
+                    read: false,
+                    language: selectedLanguage.code,
+                };
+
+                const docRef = await addDoc(collection(db, 'messages'), message);
+
+                // Update the message to mark as delivered
+                await updateDoc(doc(db, 'messages', docRef.id), { delivered: true });
+
+                // Bring the recipient user to the top of the list
+                if (updateChatList) {
+                    updateChatList(user.id);
+                }
+            } catch (error) {
+                console.error('Error sending message: ', error);
+            }
+        }
+    };
+
+    const markMessageAsRead = async (message) => {
+        if (!message.read && message.receiverId === currentUser.uid) {
+            await updateDoc(doc(db, 'messages', message.id), { read: true });
+        }
+    };
+
+    const renderMessageStatus = (message) => {
+        if (message.read) {
+            return <MaterialIcons name="done-all" size={16} color="blue" />; // read
+        } else if (message.delivered) {
+            return <MaterialIcons name="done-all" size={16} color="gray" />; // delivered
+        } else if (message.sent) {
+            return <MaterialIcons name="done" size={16} color="gray" />; // sent
+        }
+        return null;
+    };
+
+    const renderItem = ({ item }) => {
+        // Mark message as read if it is rendered and the receiver is the current user
+        if (!item.read && item.receiverId === currentUser.uid) {
+            markMessageAsRead(item);
+        }
+
+        return (
+            <View style={[styles.messageContainer, item.senderId === currentUser.uid ? styles.selfMessage : styles.otherMessage]}>
+                <Text style={styles.messageText}>{item.text}</Text>
+                <Text style={styles.messageTime}>{moment(item.timestamp.toDate()).format('HH:mm')}</Text>
+                {item.senderId === currentUser.uid && (
+                    <View style={styles.messageStatusContainer}>
+                        {renderMessageStatus(item)}
+                    </View>
+                )}
+            </View>
+        );
+    };
+
+    const handleLanguageSelect = (language) => {
+        setSelectedLanguage(language);
+        setModalVisible(false);
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : 'white' }]}>
@@ -47,17 +165,20 @@ const ChatScreen = () => {
                 )}
                 <ThemedText style={styles.headerTitle}>{user.displayName || 'User'}</ThemedText>
             </View>
-            <TouchableOpacity style={styles.languageButton}>
-                <ThemedText style={styles.languageButtonText}>Select Language</ThemedText>
+            <TouchableOpacity style={styles.languageButton} onPress={() => setModalVisible(true)}>
+                <ThemedText style={styles.languageButtonText}>Select Language ({selectedLanguage.name})</ThemedText>
                 <AntDesign name="downcircle" size={18} color="#47B6E5" />
             </TouchableOpacity>
             <FlatList
+                ref={flatListRef}
                 data={messages}
                 renderItem={renderItem}
                 keyExtractor={item => item.id}
                 style={styles.messagesList}
+                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
             />
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { backgroundColor: isDarkMode ? 'black' : 'white' }]}>
                 <TextInput
                     style={styles.input}
                     placeholder="Type a message..."
@@ -68,6 +189,23 @@ const ChatScreen = () => {
                     <AntDesign name="arrowright" size={24} color="white" />
                 </TouchableOpacity>
             </View>
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={modalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        {languages.map(language => (
+                            <TouchableOpacity key={language.code} style={styles.modalItem} onPress={() => handleLanguageSelect(language)}>
+                                <Text style={styles.modalItemText}>{language.name}</Text>
+                            </TouchableOpacity>
+                        ))}
+                        <Button title="Close" onPress={() => setModalVisible(false)} />
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -115,10 +253,11 @@ const styles = StyleSheet.create({
         padding: 10,
     },
     messageContainer: {
-        maxWidth: '70%',
+        maxWidth: '80%',
         borderRadius: 10,
         padding: 10,
-        marginVertical: 5,
+        marginVertical: 10,
+        position: 'relative',
     },
     selfMessage: {
         backgroundColor: '#ADD8E6',
@@ -130,13 +269,25 @@ const styles = StyleSheet.create({
     },
     messageText: {
         fontSize: 16,
+        textAlign: 'left',
+        right: 5,
+    },
+    messageTime: {
+        fontSize: 12,
+        color: '#888',
+        alignSelf: 'flex-end',
+        marginTop: 5,
+        left: 6 
+    },
+    messageStatusContainer: {
+        position: 'absolute',
+        right: 1,
+        bottom: 0,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F5F5F5',
-        padding: 10,
-        borderTopWidth: 1,
+        padding: 5,
         borderColor: '#E0E0E0',
     },
     input: {
@@ -153,6 +304,27 @@ const styles = StyleSheet.create({
         backgroundColor: '#47B6E5',
         borderRadius: 20,
         padding: 10,
+    },
+    modalContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalContent: {
+        width: '80%',
+        backgroundColor: 'white',
+        borderRadius: 10,
+        padding: 20,
+        alignItems: 'center',
+    },
+    modalItem: {
+        padding: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#ccc',
+    },
+    modalItemText: {
+        fontSize: 18,
     },
 });
 

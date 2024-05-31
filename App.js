@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -11,8 +12,9 @@ import TranslateScreen from './screens/TranslateScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
-
 import { FontAwesome, Entypo } from '@expo/vector-icons';
+import { auth, db } from './screens/firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -71,6 +73,34 @@ const HomeTabNavigator = () => {
 };
 
 const App = () => {
+  useEffect(() => {
+    const updateOnlineStatus = async (isOnline) => {
+      const user = auth.currentUser;
+      if (user) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          online: isOnline,
+          lastSeen: serverTimestamp(),
+        });
+      }
+    };
+
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'active') {
+        updateOnlineStatus(true);
+      } else {
+        updateOnlineStatus(false);
+      }
+    };
+
+    AppState.addEventListener('change', handleAppStateChange);
+
+    updateOnlineStatus(true); // Set online when the app is first loaded
+
+    return () => {
+      AppState.removeEventListener('change', handleAppStateChange);
+    };
+  }, []);
+
   return (
     <NavigationContainer>
       <Stack.Navigator>
@@ -102,12 +132,6 @@ const App = () => {
         <Stack.Screen
           name="Chat"
           component={ChatScreen}
-          // options={{
-          //   title: '',
-          //   headerTitleAlign: 'center',
-          //   headerTintColor: '#fff',
-          //   headerStyle: { backgroundColor: '#47B6E5' }
-          // }}
           options={{ headerShown: false }}
         />
         <Stack.Screen
