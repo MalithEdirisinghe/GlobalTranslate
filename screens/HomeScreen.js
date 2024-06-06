@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, useColorScheme, BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { ThemedView } from '../components/ThemedView';
 import { ThemedText } from '../components/ThemedText';
-import { auth, storage } from './firebase';
+import { auth, db, storage } from './firebase';
 import { getDownloadURL, ref } from 'firebase/storage';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 
-import { Entypo } from '@expo/vector-icons';
-import { Ionicons } from '@expo/vector-icons';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { FontAwesome } from '@expo/vector-icons';
+import { Entypo, Ionicons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 
 const HomeScreen = () => {
     const colorScheme = useColorScheme();
@@ -22,30 +21,45 @@ const HomeScreen = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const navigation = useNavigation();
 
-    useEffect(() => {
-        const backAction = () => {
-            BackHandler.exitApp();
-            return true;
-        };
+    useFocusEffect(
+        useCallback(() => {
+            const backAction = () => {
+                BackHandler.exitApp();
+                return true;
+            };
 
-        const backHandler = BackHandler.addEventListener(
-            'hardwareBackPress',
-            backAction
-        );
+            BackHandler.addEventListener('hardwareBackPress', backAction);
 
-        return () => backHandler.remove();
-    }, []);
+            return () => BackHandler.removeEventListener('hardwareBackPress', backAction);
+        }, [])
+    );
 
-    useEffect(() => {
-        const fetchUserProfile = async () => {
+    const fetchUserProfile = useCallback(() => {
+        let unsubscribe;
+
+        const fetchUserData = async () => {
             try {
                 const user = auth.currentUser;
                 if (user) {
-                    setDisplayName(user.displayName || 'Anonymous');
+                    const userDocRef = doc(db, 'users', user.uid);
+                    unsubscribe = onSnapshot(userDocRef, async (docSnapshot) => {
+                        if (docSnapshot.exists()) {
+                            const userData = docSnapshot.data();
+                            setDisplayName(userData.displayName || 'Anonymous');
 
-                    const profileImageRef = ref(storage, `user_images/${user.uid}.jpeg`);
-                    const url = await getDownloadURL(profileImageRef);
-                    setProfileImageUrl(url);
+                            if (userData.profileImage) {
+                                const profileImageRef = ref(storage, userData.imagePath);
+                                const url = await getDownloadURL(profileImageRef);
+                                setProfileImageUrl(url);
+                            } else {
+                                setProfileImageUrl('https://via.placeholder.com/150');
+                            }
+                        } else {
+                            console.log('No such document!');
+                        }
+                    });
+                } else {
+                    setProfileImageUrl('https://via.placeholder.com/150');
                 }
             } catch (error) {
                 console.error('Error fetching profile image:', error);
@@ -54,8 +68,24 @@ const HomeScreen = () => {
             }
         };
 
-        fetchUserProfile();
+        fetchUserData();
+
+        return () => {
+            if (unsubscribe) {
+                unsubscribe();
+            }
+        };
     }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchUserProfile();
+        }, [fetchUserProfile])
+    );
+
+    useEffect(() => {
+        fetchUserProfile();
+    }, [fetchUserProfile]);
 
     const handleLogout = async () => {
         try {
@@ -90,8 +120,12 @@ const HomeScreen = () => {
         navigation.navigate('ChatList');
     };
 
+    const handleGameButton = () => {
+        navigation.navigate('Game');
+    };
+
     return (
-        <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : 'white' }]}>
+        <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : '#E0F7FA' }]}>
             <View style={styles.profileContainer}>
                 <Image
                     source={{ uri: profileImageUrl || 'https://via.placeholder.com/150' }}
@@ -109,7 +143,7 @@ const HomeScreen = () => {
                     <FontAwesome name="language" size={24} color={iconColor} />
                     <ThemedText style={styles.optionText}>Translate</ThemedText>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.optionButton}>
+                <TouchableOpacity style={styles.optionButton} onPress={handleGameButton}>
                     <Ionicons name="game-controller" size={24} color={iconColor} />
                     <ThemedText style={styles.optionText}>Game</ThemedText>
                 </TouchableOpacity>

@@ -80,7 +80,7 @@ const LoginScreen = ({ navigation }) => {
                 })
 
                 .catch(error => {
-                    if (error.code === 'auth/invalid-credential') {
+                    if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
                         const value = "Incorrect Email or Password";
                         ToastAndroid.showWithGravityAndOffset(
                             value,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, useColorScheme, ScrollView, RefreshControl, ToastAndroid, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, useColorScheme, ScrollView, RefreshControl, ToastAndroid, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Picker } from '@react-native-picker/picker';
@@ -24,6 +24,8 @@ const TranslateScreen = () => {
     const [hasPermission, setHasPermission] = useState(null);
     const [recording, setRecording] = useState(null);
     const [imageUri, setImageUri] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [translating, setTranslating] = useState(false);
     const navigation = useNavigation();
     const route = useRoute();
     const colorScheme = useColorScheme();
@@ -59,6 +61,7 @@ const TranslateScreen = () => {
             return;
         }
 
+        setTranslating(true); // Start translating
         try {
             const response = await axios.post(
                 `https://translation.googleapis.com/language/translate/v2?key=${API_KEY}`,
@@ -74,6 +77,8 @@ const TranslateScreen = () => {
             saveTranslationHistory(inputText, translated);
         } catch (error) {
             console.error(error);
+        } finally {
+            setTranslating(false); // Stop translating
         }
     };
 
@@ -121,7 +126,9 @@ const TranslateScreen = () => {
 
         if (!result.canceled) {
             setImageUri(result.assets[0].uri);
-            performTextRecognition(result.assets[0].uri);
+            setLoading(true); // Start loading
+            await performTextRecognition(result.assets[0].uri);
+            setLoading(false); // Stop loading
         } else {
             console.log('Image selection was cancelled');
         }
@@ -177,6 +184,7 @@ const TranslateScreen = () => {
 
     const stopRecording = async () => {
         setRecording(undefined);
+        setLoading(true); // Start loading
         await recording.stopAndUnloadAsync();
 
         const uri = recording.getURI();
@@ -184,25 +192,25 @@ const TranslateScreen = () => {
             encoding: FileSystem.EncodingType.Base64,
         });
 
-            try {
-                const response = await fetch('https://us-central1-globaltranslate.cloudfunctions.net/function-1', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ audioBase64: base64Audio }),
-                });
-                console.log('response: ', response);
+        try {
+            const response = await fetch('https://us-central1-globaltranslate.cloudfunctions.net/function-1', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ audioBase64: base64Audio }),
+            });
+            console.log('response: ', response);
 
-                if (!response.ok) {
-                    throw new Error('Failed to send audio to Cloud Function');
-                }
-
-                const result = await response.text();
-                console.log(result);
-            } catch (error) {
-                console.error('Error:', error.message);
+            if (!response.ok) {
+                throw new Error('Failed to send audio to Cloud Function');
             }
+
+            const result = await response.text();
+            console.log(result);
+        } catch (error) {
+            console.error('Error:', error.message);
+        }
 
         try {
             const response = await axios.post(SPEECH_API_URL, {
@@ -227,6 +235,8 @@ const TranslateScreen = () => {
         } catch (err) {
             console.error('Error recognizing speech from audio:', err);
         }
+
+        setLoading(false); // Stop loading
     };
 
     return (
@@ -264,6 +274,9 @@ const TranslateScreen = () => {
                     </TouchableOpacity>
                 </View>
 
+                {loading && (
+                    <ActivityIndicator size="large" color="#0073e6" style={styles.activityIndicator} />
+                )}
 
                 <TouchableOpacity style={styles.cameraButton} onPress={pickImage}>
                     <Ionicons name="camera-outline" size={60} color={iconColor} />
@@ -308,7 +321,11 @@ const TranslateScreen = () => {
                 </View>
 
                 <TouchableOpacity style={styles.button} onPress={handleTranslate}>
-                    <Text style={styles.buttonText}>Translate</Text>
+                    {translating ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <Text style={styles.buttonText}>Translate</Text>
+                    )}
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.historyButton} onPress={goToHistory}>
@@ -408,6 +425,9 @@ const styles = StyleSheet.create({
         marginTop: 10,
         width: 45,
         alignSelf: 'flex-end'
+    },
+    activityIndicator: {
+        marginBottom: 20,
     },
 });
 

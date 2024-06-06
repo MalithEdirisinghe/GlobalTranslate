@@ -12,7 +12,9 @@ import TranslateScreen from './screens/TranslateScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
-import { FontAwesome, Entypo } from '@expo/vector-icons';
+import GameScreen from './screens/GameScreen';
+import UpdateProfileScreen from './screens/UpdateProfileScreen';
+import { FontAwesome, Entypo, Ionicons } from '@expo/vector-icons';
 import { auth, db } from './screens/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -39,6 +41,12 @@ const HomeTabNavigator = () => {
           } else if (route.name === 'ChatList') {
             iconName = 'chat';
             IconComponent = Entypo;
+          } else if (route.name === 'Game') {
+            iconName = 'game-controller';
+            IconComponent = Ionicons;
+          } else if (route.name === 'Update') {
+            iconName = 'person-sharp';
+            IconComponent = Ionicons;
           }
           return <IconComponent name={iconName} size={size} color={color} />;
         },
@@ -68,6 +76,26 @@ const HomeTabNavigator = () => {
           headerStyle: { backgroundColor: '#47B6E5' }
         }}
       />
+      <Tab.Screen
+        name="Game"
+        component={GameScreen}
+        options={{
+          title: 'Game',
+          headerTitleAlign: 'center',
+          headerTintColor: '#fff',
+          headerStyle: { backgroundColor: '#47B6E5' }
+        }}
+      />
+      <Tab.Screen
+        name="Update"
+        component={UpdateProfileScreen}
+        options={{
+          title: 'Profile',
+          headerTitleAlign: 'center',
+          headerTintColor: '#fff',
+          headerStyle: { backgroundColor: '#47B6E5' }
+        }}
+      />
     </Tab.Navigator>
   );
 };
@@ -92,12 +120,12 @@ const App = () => {
       }
     };
 
-    AppState.addEventListener('change', handleAppStateChange);
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
 
     updateOnlineStatus(true); // Set online when the app is first loaded
 
     return () => {
-      AppState.removeEventListener('change', handleAppStateChange);
+      subscription.remove();
     };
   }, []);
 

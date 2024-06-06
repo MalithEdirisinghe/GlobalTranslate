@@ -101,7 +101,7 @@ const HistoryScreen = () => {
     );
 
     return (
-        <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : 'white' }]}>
+        <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : '#E0F7FA' }]}>
             {loading ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={isDarkMode ? '#fff' : '#000'} />

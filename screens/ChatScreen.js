@@ -153,7 +153,7 @@ const ChatScreen = () => {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : 'white' }]}>
+        <View style={[styles.container, { backgroundColor: isDarkMode ? 'black' : '#E0F7FA' }]}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.arrow}>
                     <AntDesign name="arrowleft" size={24} color="white" />
